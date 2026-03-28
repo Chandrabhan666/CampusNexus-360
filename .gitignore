@@ -4,3 +4,10 @@ __pycache__/
 .env
 .venv/
 .venv-mac/
+
+# Local runtime artifacts / private data
+attendance.db
+*.db
+dataset/
+uploads/
+notes/
