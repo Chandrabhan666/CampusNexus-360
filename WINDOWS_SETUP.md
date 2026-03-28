@@ -1,4 +1,4 @@
-# SmartAttendance Windows Setup
+# CampusNexus-360 Windows Setup
 
 This guide is for local run on Windows (PowerShell).
 

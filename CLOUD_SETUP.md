@@ -1,4 +1,4 @@
-# SmartAttendance Cloud Setup (Free First)
+# CampusNexus-360 Cloud Setup (Free First)
 
 This guide explains in simple words how your project now works in cloud and what to do next.
 
@@ -80,4 +80,3 @@ You can explain:
 3. This is normal in free plans.
 
 For college project/demo, this is usually acceptable.
-

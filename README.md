@@ -1,6 +1,6 @@
-# SmartAttendance (Cloud + Offline Hybrid)
+# CampusNexus-360 (Cloud + Offline Hybrid)
 
-SmartAttendance is a role-based academic portal with attendance tracking (manual + face), notes/syllabus uploads, and announcements.
+CampusNexus-360 is a role-based academic portal with attendance tracking (manual + face), notes/syllabus uploads, and announcements.
 
 - Roles: `student`, `parent`, `teacher`, `admin`
 - Attendance: manual marking + face recognition
@@ -232,4 +232,3 @@ Check:
 
 - Never commit `.env` or secret keys to GitHub
 - If secrets were shared accidentally, rotate them in Supabase and update hosting env vars
-

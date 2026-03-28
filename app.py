@@ -224,7 +224,7 @@ def send_attendance_notifications(student_id, status, date_text, time_text=""):
     student_name = info.get("name") or student_id
     status_text = "PRESENT" if status == "present" else "ABSENT"
     message = (
-        f"SmartAttendance Update\n"
+        f"CampusNexus-360 Update\n"
         f"Student: {student_name} ({student_id})\n"
         f"Status: {status_text}\n"
         f"Date: {date_text}\n"
