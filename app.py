@@ -13,6 +13,7 @@ import requests
 import numpy as np
 import smtplib
 from email.message import EmailMessage
+import threading
 
 try:
     import cv2
@@ -24,7 +25,13 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "college_secret_key")
 
-raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///attendance.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+NOTES_DIR = os.path.join(BASE_DIR, "notes")
+MODEL_DIR = os.path.join(BASE_DIR, "model")
+FACE_MODEL_PATH = os.path.join(MODEL_DIR, "face_model.xml")
+
+raw_db_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'attendance.db')}")
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
@@ -45,9 +52,14 @@ STUDENT_FILE = "student_data.json"
 ANNOUNCEMENT_FILE = "announcements.json"
 SYLLABUS_FILE = "syllabus.json"
 
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("notes", exist_ok=True)
-os.makedirs("model", exist_ok=True)
+AUTH_FILE = os.path.join(BASE_DIR, "auth_users.json")
+STUDENT_FILE = os.path.join(BASE_DIR, "student_data.json")
+ANNOUNCEMENT_FILE = os.path.join(BASE_DIR, "announcements.json")
+SYLLABUS_FILE = os.path.join(BASE_DIR, "syllabus.json")
+
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(NOTES_DIR, exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 db = SQLAlchemy(app)
 
@@ -325,7 +337,7 @@ def seed_data():
     if Resource.query.filter_by(kind="syllabus").count() == 0:
         syllabus = load_json(SYLLABUS_FILE, {})
         for subject, pdf in syllabus.items():
-            path = os.path.join("uploads", pdf)
+            path = os.path.join(UPLOADS_DIR, pdf)
             if os.path.exists(path):
                 db.session.add(
                     Resource(
@@ -338,8 +350,8 @@ def seed_data():
                 )
         db.session.commit()
 
-    if Resource.query.filter_by(kind="notes").count() == 0 and os.path.exists("notes"):
-        for file_name in os.listdir("notes"):
+    if Resource.query.filter_by(kind="notes").count() == 0 and os.path.exists(NOTES_DIR):
+        for file_name in os.listdir(NOTES_DIR):
             if file_name.lower().endswith(".pdf"):
                 db.session.add(
                     Resource(
@@ -365,7 +377,34 @@ def init_db():
             app.logger.error("Database init failed at startup: %s", exc)
 
 
-init_db()
+_db_initialized = False
+_db_init_lock = threading.Lock()
+
+
+def ensure_db_initialized():
+    # Vercel runs Flask via serverless function invocations. Doing DB init at import time can crash the function.
+    # Initialize lazily and allow retries if DB is temporarily unreachable.
+    global _db_initialized
+    if _db_initialized:
+        return
+    with _db_init_lock:
+        if _db_initialized:
+            return
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception:
+            try:
+                app.logger.exception("Lazy DB init failed")
+            except Exception:
+                pass
+
+
+@app.before_request
+def _lazy_db_init_hook():
+    if request.path in ("/healthz", "/favicon.ico"):
+        return
+    ensure_db_initialized()
 
 
 @app.context_processor
@@ -405,7 +444,14 @@ def store_uploaded_file(file_obj, folder):
             public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
             return file_name, storage_path, public_url
 
-    local_path = os.path.join(folder, file_name)
+    if folder == "uploads":
+        target_dir = UPLOADS_DIR
+    elif folder == "notes":
+        target_dir = NOTES_DIR
+    else:
+        target_dir = os.path.join(BASE_DIR, folder)
+    os.makedirs(target_dir, exist_ok=True)
+    local_path = os.path.join(target_dir, file_name)
     with open(local_path, "wb") as f:
         f.write(content)
 
@@ -700,11 +746,11 @@ def mark_attendance():
     if os.environ.get("RENDER") == "true":
         return redirect("/teacher/dashboard?error=Cloud server has no camera. Use manual attendance below.")
 
-    if cv2 is None or not os.path.exists("model/face_model.xml"):
+    if cv2 is None or not os.path.exists(FACE_MODEL_PATH):
         return redirect("/teacher/dashboard?error=Face model not found. Train model locally first.")
 
     recognizer = cv2.face.LBPHFaceRecognizer_create()
-    recognizer.read("model/face_model.xml")
+    recognizer.read(FACE_MODEL_PATH)
 
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
@@ -763,11 +809,11 @@ def _load_face_tools():
         return None, None, "OpenCV is not available on server."
     if not hasattr(cv2, "face"):
         return None, None, "OpenCV face module is not available."
-    if not os.path.exists("model/face_model.xml"):
+    if not os.path.exists(FACE_MODEL_PATH):
         return None, None, "Face model not found. Train model locally first."
 
     recognizer = cv2.face.LBPHFaceRecognizer_create()
-    recognizer.read("model/face_model.xml")
+    recognizer.read(FACE_MODEL_PATH)
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     if face_cascade.empty():
         return None, None, "Face detector could not be loaded."
@@ -837,6 +883,25 @@ def teacher_face_attendance():
     return render_template("face_attendance.html", is_cloud=is_cloud)
 
 
+def _recognize_student_with_lighting_fallback(frame, recognizer, face_cascade):
+    # Baseline + a few brightness shifts to handle poor lighting quickly.
+    sid, conf, err = _recognize_student_from_frame(frame, recognizer, face_cascade)
+    if sid:
+        return sid, conf, None
+
+    for beta in (-25, 25, 45):
+        adjusted = cv2.convertScaleAbs(frame, alpha=1.0, beta=beta)
+        sid2, conf2, err2 = _recognize_student_from_frame(adjusted, recognizer, face_cascade)
+        if sid2:
+            return sid2, conf2, None
+        if conf is None and conf2 is not None:
+            conf = conf2
+        if not err and err2:
+            err = err2
+
+    return None, conf, err or "Face not recognized. Try better lighting/angle."
+
+
 @app.route("/teacher/face-attendance/verify", methods=["POST"])
 @require_roles("teacher", "admin")
 def teacher_face_attendance_verify():
@@ -860,23 +925,9 @@ def teacher_face_attendance_verify():
     if frame is None:
         return jsonify({"ok": False, "message": "Empty frame received."}), 400
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    if len(faces) == 0:
-        return jsonify({"ok": False, "message": "No face detected. Keep face in frame."}), 200
-
-    best_sid = None
-    best_conf = None
-    for (x, y, w, h) in faces:
-        sid_label, confidence = recognizer.predict(gray[y: y + h, x: x + w])
-        sid = str(sid_label)
-        if confidence <= 80 and Student.query.filter_by(student_id=sid).first():
-            if best_conf is None or confidence < best_conf:
-                best_conf = confidence
-                best_sid = sid
-
+    best_sid, best_conf, recog_err = _recognize_student_with_lighting_fallback(frame, recognizer, face_cascade)
     if not best_sid:
-        return jsonify({"ok": False, "message": "Face not recognized. Try better lighting/angle."}), 200
+        return jsonify({"ok": False, "message": recog_err or "Face not recognized."}), 200
 
     ok, msg = _mark_attendance_once(best_sid)
     return jsonify(
@@ -1016,9 +1067,9 @@ def view_resource(resource_id):
         return redirect(resource.file_url)
 
     if resource.kind == "syllabus":
-        base_folder = "uploads"
+        base_folder = UPLOADS_DIR
     else:
-        base_folder = "notes"
+        base_folder = NOTES_DIR
 
     local_name = os.path.basename(resource.storage_path)
     if os.path.exists(os.path.join(base_folder, local_name)):
@@ -1032,10 +1083,10 @@ def view_resource(resource_id):
 def view_pdf(name):
     safe_name = os.path.basename(name)
 
-    if os.path.exists("uploads/" + safe_name):
-        return send_from_directory("uploads", safe_name)
-    if os.path.exists("notes/" + safe_name):
-        return send_from_directory("notes", safe_name)
+    if os.path.exists(os.path.join(UPLOADS_DIR, safe_name)):
+        return send_from_directory(UPLOADS_DIR, safe_name)
+    if os.path.exists(os.path.join(NOTES_DIR, safe_name)):
+        return send_from_directory(NOTES_DIR, safe_name)
 
     resource = Resource.query.filter_by(file_name=safe_name).order_by(Resource.id.desc()).first()
     if resource:
