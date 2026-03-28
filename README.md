@@ -43,7 +43,7 @@ CampusNexus-360 is a role-based academic portal with attendance tracking (manual
 ### 4.1 Install dependencies
 
 ```bash
-cd /Users/chandrabhanpatel/Downloads/SmartAttendance
+cd /Users/chandrabhanpatel/Downloads/CampusNexus-360
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -61,7 +61,7 @@ Open:
 ## 5. Local Setup (Windows)
 
 ```bat
-cd C:\path\to\SmartAttendance
+cd C:\path\to\CampusNexus-360
 py -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -78,7 +78,7 @@ Face attendance requires a trained model at `model/face_model.xml`.
 ### 6.1 Capture face images (local machine with webcam)
 
 ```bash
-cd /Users/chandrabhanpatel/Downloads/SmartAttendance
+cd /Users/chandrabhanpatel/Downloads/CampusNexus-360
 python3 capture_faces.py
 ```
 
@@ -134,7 +134,7 @@ Optimizations included:
 ### 8.1 Create Supabase project
 
 1. Create a project in Supabase
-2. Create a storage bucket (example: `smartattendance`)
+2. Create a storage bucket (example: `campusnexus-360` or keep your existing `smartattendance`)
 3. Get:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`

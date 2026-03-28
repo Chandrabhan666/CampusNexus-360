@@ -33,12 +33,12 @@ Use free tiers:
 
 1. Create Supabase project (Free).
 2. In Supabase SQL Editor, no manual SQL needed; app auto-creates tables on first run.
-3. Create a public storage bucket in Supabase named `smartattendance`.
+3. Create a public storage bucket in Supabase named `campusnexus-360` (or keep your existing `smartattendance`).
 4. Copy values:
    - `DATABASE_URL` (Supabase Postgres pooled connection string)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SUPABASE_STORAGE_BUCKET=smartattendance`
+   - `SUPABASE_STORAGE_BUCKET=campusnexus-360` (or your existing bucket name)
 5. Push this code to GitHub.
 6. Create Render Web Service from that repo.
 7. Render auto-reads `render.yaml`.

@@ -5,7 +5,7 @@ This guide is for local run on Windows (PowerShell).
 ## 1) Open project
 
 ```powershell
-cd C:\path\to\SmartAttendance
+cd C:\path\to\CampusNexus-360
 ```
 
 ## 2) Create virtual environment
@@ -30,7 +30,7 @@ SECRET_KEY=your-random-secret
 DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SUPABASE_STORAGE_BUCKET=smartattendance
+SUPABASE_STORAGE_BUCKET=campusnexus-360 (or your existing bucket name)
 ```
 
 ## 5) Run app

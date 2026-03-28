@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: smartattendance
+    name: campusnexus-360
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
