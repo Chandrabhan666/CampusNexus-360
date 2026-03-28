@@ -4,4 +4,5 @@ gunicorn==22.0.0
 psycopg2-binary==2.9.9
 requests==2.32.3
 python-dotenv==1.0.1
-opencv-contrib-python-headless==4.10.0.84
+opencv-contrib-python==4.10.0.84; platform_system!="Linux"
+opencv-contrib-python-headless==4.10.0.84; platform_system=="Linux"

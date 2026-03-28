@@ -45,7 +45,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
     "pool_recycle": 280,
-    "connect_args": {"connect_timeout": 10},
 }
 
 AUTH_FILE = "auth_users.json"
@@ -386,28 +385,41 @@ def init_db():
         try:
             db.create_all()
             seed_data()
-        except SQLAlchemyError as exc:
+            return True
+        except Exception as exc:
             # Keep web process alive even if DB is temporarily unreachable.
             # This allows Render health checks and manual retry without crash loops.
             app.logger.error("Database init failed at startup: %s", exc)
+            return False
 
 
 _db_initialized = False
 _db_init_lock = threading.Lock()
+_db_init_next_retry_at = 0.0
+_db_init_backoff_seconds = 12.0
 
 
 def ensure_db_initialized():
     # Initialize lazily and allow retries if DB is temporarily unreachable.
     global _db_initialized
+    global _db_init_next_retry_at
     if _db_initialized:
+        return
+    if time.time() < _db_init_next_retry_at:
         return
     with _db_init_lock:
         if _db_initialized:
             return
+        if time.time() < _db_init_next_retry_at:
+            return
         try:
-            init_db()
-            _db_initialized = True
+            ok = init_db()
+            if ok:
+                _db_initialized = True
+            else:
+                _db_init_next_retry_at = time.time() + _db_init_backoff_seconds
         except Exception:
+            _db_init_next_retry_at = time.time() + _db_init_backoff_seconds
             try:
                 app.logger.exception("Lazy DB init failed")
             except Exception:
